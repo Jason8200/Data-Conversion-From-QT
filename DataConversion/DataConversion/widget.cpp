@@ -34,11 +34,17 @@ void Widget::writeButtonSlot()
      QString line;
      QString lineStart;
      QString myRead;
-     QString NumGroupsPro;
-     QString NumGroups;
      QString myWrite;
-     int myInt;
-     int i,j;
+     unsigned int myInt;
+     unsigned int i,j,NumGroupsPro,NumGroups;
+     unsigned int myHbit,myLbit,mycount;
+     int8_t myBuf[12];
+     union myintToFloat
+     {
+         int8_t intBuf[12];
+         float fBuf[3];
+     };
+     union myintToFloat myresult;
 
      //qDebug()<<QDir::currentPath();
      QFile file( fileName );
@@ -95,27 +101,72 @@ void Widget::writeButtonSlot()
      {
         QTextStream finalout(&finaldata);
         finalText>>myRead;
-        NumGroupsPro = myRead; //上一帧数据的第一个字节代表组数
+        NumGroupsPro = myRead.toInt(&ok,16); //上一帧数据的第一个字节代表组数
         finalText.seek(0);
         while(!finalText.atEnd())
         {
              finalText>>myRead;
-             NumGroups = myRead; //组数
+             NumGroups = myRead.toInt(&ok,16); //组数
             if(NumGroups!=NumGroupsPro)
             {
               NumGroupsPro = NumGroups;
-              finalout << "\r\n";
+              finalout << "\n";
             }
              finalText>>myRead;  //"3A"
              finalText>>myRead;  //"28" / "0C"
              j = myRead.toInt(&ok,16);
-             for (i=0;i<j; i++)
+             mycount=0;
+             if(j==12)
              {
-                finalText>>myRead;
-                myInt = myRead.toInt(&ok,16);
-                myWrite = myWrite.asprintf("%d",myInt);
-                finalout << myWrite;
-                finalout << " ";
+                 for (i=0;i<j; i++)
+                 {
+                    finalText>>myRead;
+                    myBuf[i] = myRead.toInt(&ok,16);
+                 }
+                 myresult.intBuf[0] = myBuf[1];
+                 myresult.intBuf[1] = myBuf[0];
+                 myresult.intBuf[2] = myBuf[3];
+                 myresult.intBuf[3] = myBuf[2];
+                 myresult.intBuf[4] = myBuf[5];
+                 myresult.intBuf[5] = myBuf[4];
+                 myresult.intBuf[6] = myBuf[7];
+                 myresult.intBuf[7] = myBuf[6];
+                 myresult.intBuf[8] = myBuf[9];
+                 myresult.intBuf[9] = myBuf[8];
+                 myresult.intBuf[10] = myBuf[11];
+                 myresult.intBuf[11] = myBuf[10];
+
+                 finalout << myresult.fBuf[0];
+                 finalout << " ";
+                 finalout << myresult.fBuf[1];
+                 finalout << " ";
+                 finalout << myresult.fBuf[2];
+                 finalout << " ";
+             }else
+             {
+                 for (i=0;i<j; i++)
+                 {
+                    finalText>>myRead;
+                    myInt = myRead.toInt(&ok,16);
+                    if(mycount==0)
+                    {
+                        myHbit = 256*myInt;
+                        mycount++;
+                    }else if(mycount==1)
+                    {
+                        myLbit = myInt;
+                        mycount=0;
+                        myInt = myHbit+myLbit;
+                        myWrite = myWrite.asprintf("%d",myInt);
+                        finalout << myWrite;
+                        finalout << " ";
+                    }
+                 }
+             }
+
+             if(i==12)  //计算结果单独一行
+             {
+                 finalout << "\n";
              }
        }
      }else
